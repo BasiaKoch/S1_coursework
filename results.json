@@ -1,0 +1,50 @@
+{
+    "sample_ests": {
+        "values": {
+            "lb": NaN,
+            "dE": NaN,
+            "a": NaN,
+            "b": NaN,
+            "c": NaN
+        },
+        "errors": {
+            "lb": NaN,
+            "dE": NaN,
+            "a": NaN,
+            "b": NaN,
+            "c": NaN
+        }
+    },
+    "individual_fits": {
+        "values": {
+            "lb": NaN,
+            "dE": NaN,
+            "a": NaN,
+            "b": NaN,
+            "c": NaN
+        },
+        "errors": {
+            "lb": NaN,
+            "dE": NaN,
+            "a": NaN,
+            "b": NaN,
+            "c": NaN
+        }
+    },
+    "simultaneous_fit": {
+        "values": {
+            "lb": NaN,
+            "dE": NaN,
+            "a": NaN,
+            "b": NaN,
+            "c": NaN
+        },
+        "errors": {
+            "lb": NaN,
+            "dE": NaN,
+            "a": NaN,
+            "b": NaN,
+            "c": NaN
+        }
+    }
+}

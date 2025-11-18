@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "s1_sol"
+version = "0.1.0"
+description = "Solution for the S1 coursework 2025/26"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Your Name", email = "crsid@cam.ac.uk" }
+]
+dependencies = [
+    "numpy",   # put your requirements here
+]
+requires-python = ">=3.9"
+
+[tool.setuptools]
+packages = ["s1_sol"]
