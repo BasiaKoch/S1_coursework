@@ -1,0 +1,808 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# S1 Coursework: Photon Detector Calibration Analysis\n",
+    "\n",
+    "*Your Name (crsid@cam.ac.uk)*\n",
+    "\n",
+    "## Problem Statement\n",
+    "\n",
+    "This analysis determines the performance parameters of a photon detector using calibration data. The detector measures energy $E$ when photons of known energy $E_0$ are incident. We aim to estimate 5 parameters:\n",
+    "\n",
+    "**Mean energy model:**\n",
+    "$$\\mu_E = \\lambda E_0 + \\Delta$$\n",
+    "\n",
+    "**Width (resolution) model:**\n",
+    "$$\\left( \\frac{\\sigma_E}{E_0} \\right)^2 = \\left( \\frac{a}{\\sqrt{E_0}} \\right)^2 + \\left( \\frac{b}{E_0} \\right)^2 + c^2$$\n",
+    "\n",
+    "We analyze calibration data at 7 energy points ($E_0$ = 20, 30, 40, 50, 60, 70, 80 GeV) with 1000 measurements each."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "## Setup"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Import Libraries"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "All imports successful!\n"
+     ]
+    }
+   ],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import matplotlib.pyplot as plt\n",
+    "import os\n",
+    "\n",
+    "# Import s1_sol package modules\n",
+    "from s1_sol.data_loader import load_sample_data, get_residuals, get_residuals_by_energy\n",
+    "from s1_sol.statistics import compute_sample_stats  # You'll need to implement fit functions\n",
+    "from s1_sol.models import mean_energy_model, width_energy_model, relative_width_squared\n",
+    "from s1_sol.fitting import fit_normal_mle, fit_individual_energies, fit_simultaneous_all_energies\n",
+    "from s1_sol.plotting import setup_plot_style, plot_residuals_total, plot_residuals_by_energy\n",
+    "from s1_sol.bootstrap import bootstrap_sample, run_bootstrap_analysis, compute_bootstrap_confidence_interval\n",
+    "from s1_sol.results_manager import ResultsManager\n",
+    "\n",
+    "# Set up plot styling\n",
+    "setup_plot_style()\n",
+    "\n",
+    "# Create figs directory if it doesn't exist\n",
+    "os.makedirs('../figs', exist_ok=True)\n",
+    "\n",
+    "# Initialize results manager\n",
+    "results = ResultsManager()\n",
+    "\n",
+    "print(\"All imports successful!\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import numpy as np"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Load Data"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Loaded 7000 total measurements\n",
+      "Energy points: [20 30 40 50 60 70 80]\n",
+      "\n",
+      "Measurements per energy point:\n",
+      "  E0 = 20 GeV: 1000 measurements\n",
+      "  E0 = 30 GeV: 1000 measurements\n",
+      "  E0 = 40 GeV: 1000 measurements\n",
+      "  E0 = 50 GeV: 1000 measurements\n",
+      "  E0 = 60 GeV: 1000 measurements\n",
+      "  E0 = 70 GeV: 1000 measurements\n",
+      "  E0 = 80 GeV: 1000 measurements\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>E_true</th>\n",
+       "      <th>E_rec</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>20</td>\n",
+       "      <td>23.240306</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>20</td>\n",
+       "      <td>22.919144</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>20</td>\n",
+       "      <td>22.172158</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>20</td>\n",
+       "      <td>24.270106</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>20</td>\n",
+       "      <td>22.491233</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>5</th>\n",
+       "      <td>20</td>\n",
+       "      <td>23.136427</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>6</th>\n",
+       "      <td>20</td>\n",
+       "      <td>26.423902</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>7</th>\n",
+       "      <td>20</td>\n",
+       "      <td>24.343425</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>8</th>\n",
+       "      <td>20</td>\n",
+       "      <td>18.820742</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>9</th>\n",
+       "      <td>20</td>\n",
+       "      <td>23.398703</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "   E_true      E_rec\n",
+       "0      20  23.240306\n",
+       "1      20  22.919144\n",
+       "2      20  22.172158\n",
+       "3      20  24.270106\n",
+       "4      20  22.491233\n",
+       "5      20  23.136427\n",
+       "6      20  26.423902\n",
+       "7      20  24.343425\n",
+       "8      20  18.820742\n",
+       "9      20  23.398703"
+      ]
+     },
+     "execution_count": 2,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "# Load the calibration sample\n",
+    "df, data_dict, e0_values = load_sample_data('../sample.csv')\n",
+    "\n",
+    "print(f\"Loaded {len(df)} total measurements\")\n",
+    "print(f\"Energy points: {e0_values}\")\n",
+    "print(f\"\\nMeasurements per energy point:\")\n",
+    "for e0 in e0_values:\n",
+    "    print(f\"  E0 = {e0} GeV: {len(data_dict[e0])} measurements\")\n",
+    "\n",
+    "# Display first few rows\n",
+    "df.head(10)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "## 1. Plotting Sample Estimates"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1(i) Plot Total Sample\n",
+    "\n",
+    "We first visualize all energy residuals ($E_{rec} - E_{true}$) combined."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig, ax = plot_residuals_total(df)\n",
+    "fig.savefig('../figs/Figure1.1.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 1.1 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Observation:** [Add your interpretation here]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1(ii) Overlay Samples at Each $E_0$\n",
+    "\n",
+    "Now we overlay the residual distributions for each true energy value to see how they differ."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig, ax = plot_residuals_by_energy(data_dict)\n",
+    "fig.savefig('../figs/Figure1.2.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 1.2 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Observation:** [Add your interpretation - do widths change with energy?]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1(iii) Sample Estimates\n",
+    "\n",
+    "Compute sample mean $\\hat{\\mu}_{\\text{samp}}$ and standard deviation $\\hat{\\sigma}_{\\text{samp}}$ at each $E_0$, along with their standard errors."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Compute sample statistics\n",
+    "stats_df = compute_sample_stats(data_dict)\n",
+    "\n",
+    "print(\"Sample Statistics:\")\n",
+    "print(stats_df.to_string(index=False))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Now plot the sample mean and standard deviation as a function of $E_0$:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fig, ax = plt.subplots(1, 2, figsize=(12.8, 4.8))\n",
+    "\n",
+    "# Left plot: Sample means vs E0\n",
+    "ax[0].errorbar(stats_df['E0'], stats_df['mean'], yerr=stats_df['mean_err'],\n",
+    "               fmt='o', capsize=3, label='Sample mean')\n",
+    "ax[0].set_xlabel('$E_0$ [GeV]')\n",
+    "ax[0].set_ylabel('$\\\\hat{\\\\mu}_{\\\\text{samp}}$ [GeV]')\n",
+    "ax[0].set_title('Sample Mean vs True Energy')\n",
+    "ax[0].legend()\n",
+    "ax[0].grid(True, alpha=0.3)\n",
+    "\n",
+    "# Right plot: Sample standard deviations vs E0\n",
+    "ax[1].errorbar(stats_df['E0'], stats_df['std'], yerr=stats_df['std_err'],\n",
+    "               fmt='o', capsize=3, label='Sample std', color='C1')\n",
+    "ax[1].set_xlabel('$E_0$ [GeV]')\n",
+    "ax[1].set_ylabel('$\\\\hat{\\\\sigma}_{\\\\text{samp}}$ [GeV]')\n",
+    "ax[1].set_title('Sample Std Dev vs True Energy')\n",
+    "ax[1].legend()\n",
+    "ax[1].grid(True, alpha=0.3)\n",
+    "\n",
+    "fig.tight_layout()\n",
+    "fig.savefig('../figs/Figure1.3.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 1.3 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Observation:** [Comment on trends - is mean linear? How does width change?]"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1(iv) Fit Trends\n",
+    "\n",
+    "Perform weighted least squares fits to estimate parameters $\\{\\lambda, \\Delta, a, b, c\\}$.\n",
+    "\n",
+    "**TODO:** You need to implement `fit_mean_model_least_squares` and `fit_width_model_least_squares` in `s1_sol/statistics.py`"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Import the least squares functions\n",
+    "from s1_sol.statistics import fit_mean_model_least_squares, fit_width_model_least_squares\n",
+    "\n",
+    "# Fit mean model\n",
+    "lambda_samp, delta_samp, lambda_err_samp, delta_err_samp = fit_mean_model_least_squares(\n",
+    "    stats_df['E0'].values, stats_df['mean'].values, stats_df['mean_err'].values\n",
+    ")\n",
+    "\n",
+    "# Fit width model\n",
+    "a_samp, b_samp, c_samp, a_err_samp, b_err_samp, c_err_samp = fit_width_model_least_squares(\n",
+    "    stats_df['E0'].values, stats_df['std'].values, stats_df['std_err'].values\n",
+    ")\n",
+    "\n",
+    "print(f\"Sample Estimates from Least Squares:\")\n",
+    "print(f\"λ = {lambda_samp:.4f} ± {lambda_err_samp:.4f}\")\n",
+    "print(f\"Δ = {delta_samp:.4f} ± {delta_err_samp:.4f}\")\n",
+    "print(f\"a = {a_samp:.4f} ± {a_err_samp:.4f}\")\n",
+    "print(f\"b = {b_samp:.4f} ± {b_err_samp:.4f}\")\n",
+    "print(f\"c = {c_samp:.4f} ± {c_err_samp:.4f}\")\n",
+    "\n",
+    "# Save to results\n",
+    "results.update('sample_ests',\n",
+    "               {'lb': lambda_samp, 'dE': delta_samp, 'a': a_samp, 'b': b_samp, 'c': c_samp},\n",
+    "               {'lb': lambda_err_samp, 'dE': delta_err_samp, 'a': a_err_samp, 'b': b_err_samp, 'c': c_err_samp})"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Plot the fitted trends with rescaled axes ($\\hat{\\mu}_{\\text{samp}} - E_0$ and $\\hat{\\sigma}_{\\text{samp}} / E_0$):"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Create Figure 1.4 with fitted curves\n",
+    "# Note: Bootstrap error bands will be added in Section 4\n",
+    "\n",
+    "fig, ax = plt.subplots(1, 2, figsize=(12.8, 4.8))\n",
+    "\n",
+    "# Create fine grid for smooth curves\n",
+    "e0_smooth = np.linspace(e0_values.min(), e0_values.max(), 100)\n",
+    "\n",
+    "# Left plot: μ - E0 (rescaled mean)\n",
+    "rescaled_mean = stats_df['mean'].values - stats_df['E0'].values\n",
+    "rescaled_mean_fit = mean_energy_model(e0_smooth, lambda_samp, delta_samp) - e0_smooth\n",
+    "\n",
+    "ax[0].errorbar(stats_df['E0'], rescaled_mean, yerr=stats_df['mean_err'],\n",
+    "               fmt='ko', label='Sample estimates', capsize=3)\n",
+    "ax[0].plot(e0_smooth, rescaled_mean_fit, 'r-', linewidth=2,\n",
+    "           label=f'Fit: λ={lambda_samp:.4f}, Δ={delta_samp:.4f}')\n",
+    "ax[0].set_xlabel('$E_0$ [GeV]')\n",
+    "ax[0].set_ylabel('$\\\\hat{\\\\mu}_{\\\\text{samp}} - E_0$ [GeV]')\n",
+    "ax[0].set_title('Rescaled Mean vs True Energy')\n",
+    "ax[0].legend()\n",
+    "ax[0].grid(True, alpha=0.3)\n",
+    "\n",
+    "# Right plot: σ/E0 (relative width)\n",
+    "relative_width = stats_df['std'].values / stats_df['E0'].values\n",
+    "relative_width_err = stats_df['std_err'].values / stats_df['E0'].values\n",
+    "relative_width_fit = width_energy_model(e0_smooth, a_samp, b_samp, c_samp) / e0_smooth\n",
+    "\n",
+    "ax[1].errorbar(stats_df['E0'], relative_width, yerr=relative_width_err,\n",
+    "               fmt='ko', label='Sample estimates', capsize=3)\n",
+    "ax[1].plot(e0_smooth, relative_width_fit, 'b-', linewidth=2,\n",
+    "           label=f'Fit: a={a_samp:.4f}, b={b_samp:.4f}, c={c_samp:.4f}')\n",
+    "ax[1].set_xlabel('$E_0$ [GeV]')\n",
+    "ax[1].set_ylabel('$\\\\hat{\\\\sigma}_{\\\\text{samp}} / E_0$')\n",
+    "ax[1].set_title('Relative Width vs True Energy')\n",
+    "ax[1].legend()\n",
+    "ax[1].grid(True, alpha=0.3)\n",
+    "\n",
+    "fig.tight_layout()\n",
+    "fig.savefig('../figs/Figure1.4.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 1.4 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "## 2. Individual Fits"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 2(i) Normal Fits\n",
+    "\n",
+    "Perform unbinned maximum likelihood fits using a normal distribution at each $E_0$ independently."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Fit normal distribution at each energy point\n",
+    "indiv_fits_df = fit_individual_energies(data_dict)\n",
+    "\n",
+    "print(\"Individual MLE Fits:\")\n",
+    "print(indiv_fits_df.to_string(index=False))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Create plots showing the data with fitted normal distributions:"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# TODO: Create Figure 2.1 showing individual fits\n",
+    "# Left: Overlaid histograms with fitted curves\n",
+    "# Right: Total histogram with sum of fitted distributions\n",
+    "\n",
+    "fig, ax = plt.subplots(1, 2, figsize=(12.8, 4.8))\n",
+    "\n",
+    "# TODO: Add your plotting code here\n",
+    "\n",
+    "fig.savefig('../figs/Figure2.1.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 2.1 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 2(ii) Fit Trends\n",
+    "\n",
+    "Use the fitted means and widths from individual MLE fits to determine $\\{\\lambda, \\Delta, a, b, c\\}$ via least squares."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Use the least squares functions on the individual fit results\n",
+    "\n",
+    "lambda_indiv, delta_indiv, lambda_err_indiv, delta_err_indiv = fit_mean_model_least_squares(\n",
+    "    indiv_fits_df['E0'].values, indiv_fits_df['mu'].values, indiv_fits_df['mu_err'].values\n",
+    ")\n",
+    "\n",
+    "a_indiv, b_indiv, c_indiv, a_err_indiv, b_err_indiv, c_err_indiv = fit_width_model_least_squares(\n",
+    "    indiv_fits_df['E0'].values, indiv_fits_df['sigma'].values, indiv_fits_df['sigma_err'].values\n",
+    ")\n",
+    "\n",
+    "print(f\"Individual Fits + Least Squares:\")\n",
+    "print(f\"λ = {lambda_indiv:.4f} ± {lambda_err_indiv:.4f}\")\n",
+    "print(f\"Δ = {delta_indiv:.4f} ± {delta_err_indiv:.4f}\")\n",
+    "print(f\"a = {a_indiv:.4f} ± {a_err_indiv:.4f}\")\n",
+    "print(f\"b = {b_indiv:.4f} ± {b_err_indiv:.4f}\")\n",
+    "print(f\"c = {c_indiv:.4f} ± {c_err_indiv:.4f}\")\n",
+    "\n",
+    "# Save to results\n",
+    "results.update('individual_fits',\n",
+    "               {'lb': lambda_indiv, 'dE': delta_indiv, 'a': a_indiv, 'b': b_indiv, 'c': c_indiv},\n",
+    "               {'lb': lambda_err_indiv, 'dE': delta_err_indiv, 'a': a_err_indiv, 'b': b_err_indiv, 'c': c_err_indiv})"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# TODO: Create Figure 2.2 - fitted trends with bootstrap error bands\n",
+    "\n",
+    "fig, ax = plt.subplots(1, 2, figsize=(12.8, 4.8))\n",
+    "\n",
+    "# TODO: Add your plotting code here\n",
+    "\n",
+    "fig.savefig('../figs/Figure2.2.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 2.2 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "## 3. Simultaneous Fit"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 3(i) The Simultaneous Likelihood\n",
+    "\n",
+    "The simultaneous likelihood fits all 5 parameters directly to the full dataset:\n",
+    "\n",
+    "$$\\mathcal{L}(\\lambda, \\Delta, a, b, c) = \\prod_{i=1}^{7} \\prod_{j=1}^{1000} \\frac{1}{\\sqrt{2\\pi}\\sigma_E(E_{0,i})} \\exp\\left[-\\frac{(E_{ij} - \\mu_E(E_{0,i}))^2}{2\\sigma_E^2(E_{0,i})}\\right]$$\n",
+    "\n",
+    "where $\\mu_E(E_0) = \\lambda E_0 + \\Delta$ and $\\sigma_E(E_0) = E_0 \\sqrt{(a/\\sqrt{E_0})^2 + (b/E_0)^2 + c^2}$."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Perform simultaneous fit\n",
+    "params_simul, errors_simul, minuit_obj = fit_simultaneous_all_energies(data_dict)\n",
+    "\n",
+    "print(\"Simultaneous Fit Results:\")\n",
+    "print(f\"λ = {params_simul['lam']:.4f} ± {errors_simul['lam']:.4f}\")\n",
+    "print(f\"Δ = {params_simul['delta']:.4f} ± {errors_simul['delta']:.4f}\")\n",
+    "print(f\"a = {params_simul['a']:.4f} ± {errors_simul['a']:.4f}\")\n",
+    "print(f\"b = {params_simul['b']:.4f} ± {errors_simul['b']:.4f}\")\n",
+    "print(f\"c = {params_simul['c']:.4f} ± {errors_simul['c']:.4f}\")\n",
+    "print(f\"\\nFit valid: {minuit_obj.valid}\")\n",
+    "print(f\"Fit accurate: {minuit_obj.accurate}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# TODO: Create Figure 3.1 - fitted curves with bootstrap error bands\n",
+    "\n",
+    "fig, ax = plt.subplots(1, 2, figsize=(12.8, 4.8))\n",
+    "\n",
+    "# TODO: Add your plotting code here\n",
+    "\n",
+    "fig.savefig('../figs/Figure3.1.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 3.1 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 3(ii) Saving the Results"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Update results with simultaneous fit\n",
+    "results.update('simultaneous_fit',\n",
+    "               {'lb': params_simul['lam'], 'dE': params_simul['delta'],\n",
+    "                'a': params_simul['a'], 'b': params_simul['b'], 'c': params_simul['c']},\n",
+    "               {'lb': errors_simul['lam'], 'dE': errors_simul['delta'],\n",
+    "                'a': errors_simul['a'], 'b': errors_simul['b'], 'c': errors_simul['c']})\n",
+    "\n",
+    "# Save results.json\n",
+    "results.save('../results.json')\n",
+    "\n",
+    "# Display results\n",
+    "results.display()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 3(iii) Comparing the Results\n",
+    "\n",
+    "Compare parameter estimates from all three methods."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# TODO: Create Figure 3.2 - comparison plot of all three methods\n",
+    "\n",
+    "fig, ax = plt.subplots(figsize=(6.4, 6.4))\n",
+    "\n",
+    "# TODO: Add your comparison plot here\n",
+    "\n",
+    "fig.savefig('../figs/Figure3.2.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 3.2 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "## 4. Bootstrap Entire Sample"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Run non-parametric bootstrap with 2500 samples to validate uncertainty estimates."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# TODO: Implement bootstrap analysis\n",
+    "# This will take ~1 minute\n",
+    "\n",
+    "# def analysis_function(bootstrap_data):\n",
+    "#     # Run all three methods on bootstrap sample\n",
+    "#     # Return dict with all parameters\n",
+    "#     pass\n",
+    "\n",
+    "# bootstrap_results = run_bootstrap_analysis(data_dict, analysis_function, n_bootstrap=2500)\n",
+    "\n",
+    "print(\"TODO: Implement bootstrap analysis\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# TODO: Create Figure 4.1 - Bootstrap distributions (5 subplots, one per parameter)\n",
+    "\n",
+    "fig, ax = plt.subplots(2, 3, figsize=(19.2, 9.6))\n",
+    "\n",
+    "# TODO: Add bootstrap histograms\n",
+    "\n",
+    "ax[0,0].set_xlabel(\"$\\\\lambda$\")\n",
+    "ax[0,1].set_xlabel(\"$\\\\Delta$\")\n",
+    "ax[0,2].set_visible(False)\n",
+    "ax[1,0].set_xlabel(\"$a$\")\n",
+    "ax[1,1].set_xlabel(\"$b$\")\n",
+    "ax[1,2].set_xlabel(\"$c$\")\n",
+    "\n",
+    "fig.savefig('../figs/Figure4.1.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 4.1 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# TODO: Create Figure 4.2 - Comparison with bootstrap uncertainties\n",
+    "\n",
+    "fig, ax = plt.subplots(figsize=(6.4, 6.4))\n",
+    "\n",
+    "# TODO: Add comparison plot with both original and bootstrap uncertainties\n",
+    "\n",
+    "fig.savefig('../figs/Figure4.2.pdf')\n",
+    "plt.show()\n",
+    "\n",
+    "print(\"Figure 4.2 saved.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "## 5. Discussion of Results\n",
+    "\n",
+    "*Maximum 500 words*\n",
+    "\n",
+    "TODO: Add your discussion here. Consider:\n",
+    "- Do the three methods (sample estimates, individual fits, simultaneous fit) agree?\n",
+    "- Which method gives the most precise estimates? Why?\n",
+    "- How do the bootstrap uncertainties compare to the fitted uncertainties?\n",
+    "- Are the parameter values physically reasonable?\n",
+    "- What do the fitted parameters tell us about detector performance?\n",
+    "- Would you redesign the analysis in any way?\n",
+    "- Any unexpected findings or discrepancies?"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python (ml_env)",
+   "language": "python",
+   "name": "ml_env"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.13"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
