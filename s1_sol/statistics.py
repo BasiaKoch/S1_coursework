@@ -2,6 +2,9 @@
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import curve_fit
+
+from s1_sol.models import mean_energy_model, width_energy_model
 
 
 def compute_sample_stats(data_dict):
@@ -88,9 +91,26 @@ def fit_mean_model_least_squares(e0_values, means, mean_errors):
     Uses weighted least squares with weights = 1/sigma^2
     You can use scipy.optimize.curve_fit or numpy.polyfit or implement manually
     """
-    # TODO: Implement weighted least squares fit
-    # Hint: Use scipy.optimize.curve_fit with sigma=mean_errors
-    raise NotImplementedError("You need to implement this function!")
+    # Initial guesses: lambda ~ 1 (perfect calibration), delta ~ 0 (no offset)
+    p0 = [1.0, 0.0]
+
+    # Perform weighted least squares fit
+    # sigma parameter provides weights = 1/sigma^2
+    # absolute_sigma=True means errors are in same units as data
+    popt, pcov = curve_fit(
+        mean_energy_model,
+        e0_values,
+        means,
+        p0=p0,
+        sigma=mean_errors,
+        absolute_sigma=True
+    )
+
+    # Extract parameters and errors
+    lambda_fit, delta_fit = popt
+    lambda_err, delta_err = np.sqrt(np.diag(pcov))
+
+    return lambda_fit, delta_fit, lambda_err, delta_err
 
 
 def fit_width_model_least_squares(e0_values, stds, std_errors):
@@ -128,6 +148,27 @@ def fit_width_model_least_squares(e0_values, stds, std_errors):
     Be careful with error propagation: if you fit σ^2, the errors are ~2*σ*σ_err
     You can use scipy.optimize.curve_fit
     """
-    # TODO: Implement weighted least squares fit
-    # Hint: You may want to fit sigma^2 or sigma/E0 depending on your approach
-    raise NotImplementedError("You need to implement this function!")
+    # Initial guesses for a, b, c
+    # Typical values: a ~ 0.1 (stochastic term), b ~ 0.01 (noise), c ~ 0.01 (constant)
+    p0 = [0.1, 0.01, 0.01]
+
+    # Bounds to ensure physical parameters (all positive)
+    bounds = ([0, 0, 0], [np.inf, np.inf, np.inf])
+
+    # Perform weighted least squares fit
+    # Fit σ_E directly (not σ_E^2) to avoid error propagation complications
+    popt, pcov = curve_fit(
+        width_energy_model,
+        e0_values,
+        stds,
+        p0=p0,
+        sigma=std_errors,
+        absolute_sigma=True,
+        bounds=bounds
+    )
+
+    # Extract parameters and errors
+    a_fit, b_fit, c_fit = popt
+    a_err, b_err, c_err = np.sqrt(np.diag(pcov))
+
+    return a_fit, b_fit, c_fit, a_err, b_err, c_err
