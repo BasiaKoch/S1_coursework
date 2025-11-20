@@ -1,5 +1,6 @@
 """Plotting utilities for the analysis"""
 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -18,50 +19,28 @@ def setup_plot_style():
 
 
 def plot_residuals_total(df):
-    """
-    Plot E_rec - E_true for all data (Figure 1.1)
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame with columns E_true and E_rec
+    fig, ax = plt.subplots(figsize=(6.4, 4.8)) #create new matplotlib figure and axes 
 
-    Returns
-    -------
-    fig, ax : matplotlib Figure and Axes
-    """
-    fig, ax = plt.subplots(figsize=(6.4, 4.8))
+    residuals = df['E_rec'] - df['E_true'] #residuals for each event 
 
-    residuals = df['E_rec'] - df['E_true']
-
-    ax.hist(residuals, bins=50, alpha=0.7, edgecolor='black')
-    ax.set_xlabel('$E_{rec} - E_{true}$ [GeV]')
+    ax.hist(residuals, bins=50, alpha=0.7, edgecolor='black') #plot histogram of residuals
+    ax.set_xlabel('$E_{rec} - E_{true}$ [GeV]') 
     ax.set_ylabel('Counts')
     ax.set_title('Energy Residuals (All Data)')
     ax.grid(True, alpha=0.3)
 
-    return fig, ax
+    return fig, ax #return the figure and axes objects
 
 
 def plot_residuals_by_energy(data_dict):
-    """
-    Plot E - E0 with histograms overlaid for each E0 (Figure 1.2)
 
-    Parameters
-    ----------
-    data_dict : dict
-        Dictionary mapping E0 -> array of E measurements
+    fig, ax = plt.subplots(figsize=(6.4, 4.8)) 
 
-    Returns
-    -------
-    fig, ax : matplotlib Figure and Axes
-    """
-    fig, ax = plt.subplots(figsize=(6.4, 4.8))
+    colors = plt.cm.viridis(np.linspace(0, 1, len(data_dict))) #generate one color per group
 
-    colors = plt.cm.viridis(np.linspace(0, 1, len(data_dict)))
-
-    for i, (e0, e_measurements) in enumerate(sorted(data_dict.items())):
-        residuals = e_measurements - e0
+    for i, (e0, e_measurements) in enumerate(sorted(data_dict.items())): #loop over each true energy 
+        residuals = e_measurements - e0 #residuals per goup
         ax.hist(residuals, bins=30, alpha=0.5, label=f'$E_0$ = {e0} GeV',
                 color=colors[i], edgecolor='black', linewidth=0.5)
 
@@ -73,175 +52,185 @@ def plot_residuals_by_energy(data_dict):
 
     return fig, ax
 
-
-def plot_sample_statistics(stats_df, e0_values, lam=None, delta=None, a=None, b=None, c=None):
+def plot_sample_statistics(stats_df, savepath="figs/Figure1.3.pdf"):
     """
-    Plot sample means and standard deviations vs E0 with optional fitted curves (Figure 1.3)
+    Plot sample means and standard deviations vs E0 (Figure 1.3)
+    using the sample statistics computed earlier.
 
     Parameters
     ----------
     stats_df : pd.DataFrame
         DataFrame with columns: E0, mean, mean_err, std, std_err
-    e0_values : np.ndarray
-        Array of E0 values for plotting fitted curves
-    lam, delta : float, optional
-        Fitted parameters for mean model (if provided, will plot fitted curve)
-    a, b, c : float, optional
-        Fitted parameters for width model (if provided, will plot fitted curve)
 
     Returns
     -------
-    fig, axes : matplotlib Figure and Axes (2 subplots)
+    fig, axes : matplotlib Figure and array of Axes
     """
-    from s1_sol.models import mean_energy_model, width_energy_model
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8))
 
-    # Left plot: Sample means vs E0
-    axes[0].errorbar(stats_df['E0'], stats_df['mean'], yerr=stats_df['mean_err'],
-                     fmt='ko', label='Sample means', capsize=3)
-    if lam is not None and delta is not None:
-        e0_smooth = np.linspace(e0_values.min(), e0_values.max(), 100)
-        mu_fit = mean_energy_model(e0_smooth, lam, delta)
-        axes[0].plot(e0_smooth, mu_fit, 'r-', label=f'Fit: λ={lam:.4f}, Δ={delta:.4f}')
-    axes[0].set_xlabel('$E_0$ [GeV]')
-    axes[0].set_ylabel('$\\mu_E$ [GeV]')
-    axes[0].set_title('Sample Means vs True Energy')
-    axes[0].legend()
+    # ---------------------------------------------------------
+    # Left subplot: sample mean vs E0
+    # ---------------------------------------------------------
+    axes[0].errorbar(
+        stats_df['E0'], stats_df['mean'],
+        yerr=stats_df['mean_err'],
+        fmt='o', capsize=4
+    )
+    axes[0].set_xlabel(r"$E_0$ [GeV]")
+    axes[0].set_ylabel(r"$\hat{\mu}_{\rm samp}$ [GeV]")
+    axes[0].set_title("Sample Means vs True Energy")
     axes[0].grid(True, alpha=0.3)
 
-    # Right plot: Sample stds vs E0
-    axes[1].errorbar(stats_df['E0'], stats_df['std'], yerr=stats_df['std_err'],
-                     fmt='ko', label='Sample std devs', capsize=3)
-    if a is not None and b is not None and c is not None:
-        e0_smooth = np.linspace(e0_values.min(), e0_values.max(), 100)
-        sigma_fit = width_energy_model(e0_smooth, a, b, c)
-        axes[1].plot(e0_smooth, sigma_fit, 'b-',
-                    label=f'Fit: a={a:.4f}, b={b:.4f}, c={c:.4f}')
-    axes[1].set_xlabel('$E_0$ [GeV]')
-    axes[1].set_ylabel('$\\sigma_E$ [GeV]')
-    axes[1].set_title('Sample Standard Deviations vs True Energy')
-    axes[1].legend()
+    # ---------------------------------------------------------
+    # Right subplot: sample std dev vs E0
+    # ---------------------------------------------------------
+    axes[1].errorbar(
+        stats_df['E0'], stats_df['std'],
+        yerr=stats_df['std_err'],
+        fmt='o', capsize=4
+    )
+    axes[1].set_xlabel(r"$E_0$ [GeV]")
+    axes[1].set_ylabel(r"$\hat{\sigma}_{\rm samp}$ [GeV]")
+    axes[1].set_title("Sample Std Dev vs True Energy")
     axes[1].grid(True, alpha=0.3)
 
-    plt.tight_layout()
+    fig.tight_layout()
+
+    # Ensure directory exists and save
+    save_dir = os.path.dirname(savepath)
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+    fig.savefig(savepath)
+
     return fig, axes
 
 
-def plot_fitted_trends_with_bootstrap(e0_values, lam, delta, a, b, c,
-                                      bootstrap_results=None, alpha=0.68):
-    """
-    Plot fitted parameter trends with bootstrap error bands (Figure 1.4)
+# ----------------------------------------------------------
+# 1. Bootstrap function for fitted curves
+# ----------------------------------------------------------
+def bootstrap_fit_results(e0_values, means, mean_errs, stds, std_errs,
+                          fit_mean_fn, fit_width_fn, n_boot=500):
 
-    Parameters
-    ----------
-    e0_values : np.ndarray
-        Array of E0 values for plotting
-    lam, delta : float
-        Fitted parameters for mean model
-    a, b, c : float
-        Fitted parameters for width model
-    bootstrap_results : list of dict, optional
-        List of bootstrap results, each dict containing fitted parameters
-        If provided, will show bootstrap confidence bands
-    alpha : float
-        Confidence level for bootstrap bands (default: 0.68 for 1-sigma)
+    lam_samples = []
+    delta_samples = []
+    a_samples = []
+    b_samples = []
+    c_samples = []
 
-    Returns
-    -------
-    fig, axes : matplotlib Figure and Axes (2 subplots)
-    """
-    from s1_sol.models import mean_energy_model, width_energy_model
+    rng = np.random.default_rng(123)
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.8))
+    for _ in range(n_boot):
 
-    e0_smooth = np.linspace(e0_values.min(), e0_values.max(), 100)
+        # resample means + widths using Gaussian errors
+        means_bs = rng.normal(means, mean_errs)
+        stds_bs  = rng.normal(stds, std_errs)
 
-    # Left plot: Mean energy model
-    mu_central = mean_energy_model(e0_smooth, lam, delta)
-    axes[0].plot(e0_smooth, mu_central, 'r-', linewidth=2, label='Best fit')
+        # fit mean model
+        lam, delta, _, _ = fit_mean_fn(e0_values, means_bs, mean_errs)
+        lam_samples.append(lam)
+        delta_samples.append(delta)
 
-    if bootstrap_results is not None:
-        # Compute bootstrap confidence band
-        mu_bootstrap = np.array([
-            mean_energy_model(e0_smooth, res['lam'], res['delta'])
-            for res in bootstrap_results
-        ])
-        mu_lower = np.percentile(mu_bootstrap, 100 * (1 - alpha) / 2, axis=0)
-        mu_upper = np.percentile(mu_bootstrap, 100 * (1 + alpha) / 2, axis=0)
-        axes[0].fill_between(e0_smooth, mu_lower, mu_upper, alpha=0.3, color='red',
-                            label=f'{int(alpha*100)}% Bootstrap CI')
+        # fit width model
+        a, b, c, _, _, _ = fit_width_fn(e0_values, stds_bs, std_errs)
+        a_samples.append(a)
+        b_samples.append(b)
+        c_samples.append(c)
 
-    axes[0].set_xlabel('$E_0$ [GeV]')
-    axes[0].set_ylabel('$\\mu_E$ [GeV]')
-    axes[0].set_title('Mean Energy Model')
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
-
-    # Right plot: Width model
-    sigma_central = width_energy_model(e0_smooth, a, b, c)
-    axes[1].plot(e0_smooth, sigma_central, 'b-', linewidth=2, label='Best fit')
-
-    if bootstrap_results is not None:
-        # Compute bootstrap confidence band
-        sigma_bootstrap = np.array([
-            width_energy_model(e0_smooth, res['a'], res['b'], res['c'])
-            for res in bootstrap_results
-        ])
-        sigma_lower = np.percentile(sigma_bootstrap, 100 * (1 - alpha) / 2, axis=0)
-        sigma_upper = np.percentile(sigma_bootstrap, 100 * (1 + alpha) / 2, axis=0)
-        axes[1].fill_between(e0_smooth, sigma_lower, sigma_upper, alpha=0.3, color='blue',
-                            label=f'{int(alpha*100)}% Bootstrap CI')
-
-    axes[1].set_xlabel('$E_0$ [GeV]')
-    axes[1].set_ylabel('$\\sigma_E$ [GeV]')
-    axes[1].set_title('Energy Resolution Model')
-    axes[1].legend()
-    axes[1].grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    return fig, axes
+    return (
+        np.array(lam_samples), np.array(delta_samples),
+        np.array(a_samples), np.array(b_samples), np.array(c_samples)
+    )
 
 
-def plot_bootstrap_distributions(bootstrap_results, param_names=None):
-    """
-    Plot histograms of bootstrap parameter distributions
+# ----------------------------------------------------------
+# 2. Produce Figure 1.4
+# ----------------------------------------------------------
+def plot_rescaled_with_fits_and_bands(stats_df,
+                                      lambda_samp, delta_samp,
+                                      a_samp, b_samp, c_samp,
+                                      lam_samples, delta_samples,
+                                      a_samples, b_samples, c_samples,
+                                      savepath="figs/Figure1.4.pdf"):
 
-    Parameters
-    ----------
-    bootstrap_results : list of dict
-        List of bootstrap results, each dict containing fitted parameters
-    param_names : list of str, optional
-        Names of parameters to plot. If None, plots all parameters.
+    E0 = stats_df["E0"].values
+    
+    # rescaled data
+    mean_bias        = stats_df["mean"].values - E0
+    mean_bias_err    = stats_df["mean_err"].values
 
-    Returns
-    -------
-    fig, axes : matplotlib Figure and Axes
-    """
-    if param_names is None:
-        param_names = list(bootstrap_results[0].keys())
+    sigma_rel        = stats_df["std"].values / E0
+    sigma_rel_err    = stats_df["std_err"].values / E0
 
-    n_params = len(param_names)
-    n_cols = min(3, n_params)
-    n_rows = (n_params + n_cols - 1) // n_cols
+    # smooth x for curves
+    E0_smooth = np.linspace(E0.min(), E0.max(), 300)
 
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 4 * n_rows))
-    axes = np.atleast_1d(axes).flatten()
+    # fitted curves
+    mean_bias_curve = (lambda_samp - 1) * E0_smooth + delta_samp
+    sigma_rel_curve = np.sqrt(
+        (a_samp / np.sqrt(E0_smooth))**2 +
+        (b_samp / E0_smooth)**2 +
+        c_samp**2
+    )
 
-    for i, param in enumerate(param_names):
-        values = [res[param] for res in bootstrap_results]
-        axes[i].hist(values, bins=50, alpha=0.7, edgecolor='black')
-        axes[i].set_xlabel(f'{param}')
-        axes[i].set_ylabel('Frequency')
-        axes[i].set_title(f'Bootstrap Distribution: {param}')
-        axes[i].axvline(np.mean(values), color='r', linestyle='--', label='Mean')
-        axes[i].axvline(np.median(values), color='g', linestyle='--', label='Median')
-        axes[i].legend()
-        axes[i].grid(True, alpha=0.3)
+    # bootstrap bands
+    mean_bias_band_low = []
+    mean_bias_band_high = []
+    sigma_rel_band_low = []
+    sigma_rel_band_high = []
 
-    # Hide unused subplots
-    for j in range(i + 1, len(axes)):
-        axes[j].axis('off')
+    for e in E0_smooth:
+        # evaluate bootstrap mean model
+        bias_samples = (lam_samples - 1) * e + delta_samples
+        mean_bias_band_low.append(np.percentile(bias_samples, 16))
+        mean_bias_band_high.append(np.percentile(bias_samples, 84))
 
-    plt.tight_layout()
-    return fig, axes
+        # evaluate bootstrap width model
+        width_samples = np.sqrt(
+            (a_samples / np.sqrt(e))**2 +
+            (b_samples / e)**2 +
+            c_samples**2
+        )
+        sigma_rel_band_low.append(np.percentile(width_samples, 16))
+        sigma_rel_band_high.append(np.percentile(width_samples, 84))
+
+    # ------------------------------------------------------
+    # Plot
+    # ------------------------------------------------------
+    fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+
+    # ------------------ LEFT: Mean Bias ------------------
+    ax[0].errorbar(E0, mean_bias, yerr=mean_bias_err, fmt='o', label="Data")
+    ax[0].plot(E0_smooth, mean_bias_curve, 'r-', label="Fit")
+
+    ax[0].fill_between(
+        E0_smooth, mean_bias_band_low, mean_bias_band_high,
+        color='r', alpha=0.3, label="±1σ band"
+    )
+
+    ax[0].set_xlabel("$E_0$ [GeV]")
+    ax[0].set_ylabel("$\hat{\\mu}_{\\rm samp} - E_0$ [GeV]")
+    ax[0].set_title("Mean Bias vs $E_0$")
+    ax[0].grid(True, alpha=0.3)
+    ax[0].legend()
+
+    # ------------------ RIGHT: Relative Width ------------------
+    ax[1].errorbar(E0, sigma_rel, yerr=sigma_rel_err, fmt='o', label="Data")
+    ax[1].plot(E0_smooth, sigma_rel_curve, 'r-', label="Fit")
+
+    ax[1].fill_between(
+        E0_smooth, sigma_rel_band_low, sigma_rel_band_high,
+        color='r', alpha=0.3, label="±1σ band"
+    )
+
+    ax[1].set_xlabel("$E_0$ [GeV]")
+    ax[1].set_ylabel("$\hat{\\sigma}_{\\rm samp}/E_0$")
+    ax[1].set_title("Relative Width vs $E_0$")
+    ax[1].grid(True, alpha=0.3)
+    ax[1].legend()
+
+    fig.tight_layout()
+    os.makedirs("figs", exist_ok=True)
+    fig.savefig(savepath)
+
+    return fig, ax
