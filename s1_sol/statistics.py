@@ -84,8 +84,9 @@ def fit_width_model_least_squares(e0_values, stds, std_errors):
     # Initial guesses for parameters
     m = Minuit(ls, a=0.5, b=0.1, c=0.01)
 
-    # Physical limits: a >= 0, c >= 0
+    # Physical limits: a, b, c >= 0 (all represent positive physical quantities)
     m.limits["a"] = (0, None)
+    m.limits["b"] = (0, None)
     m.limits["c"] = (0, None)
 
     m.migrad()
