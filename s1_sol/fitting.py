@@ -103,112 +103,87 @@ def fit_individual_energies(data_dict):
 
     return pd.DataFrame(results)
 
-
+import numpy as np
+from scipy.stats import norm
+from iminuit import Minuit
 def fit_simultaneous_all_energies(data_dict, initial_params=None):
     """
-    Simultaneous fit of all parameters {λ, Δ, a, b, c} to all data at once
+    Unbinned maximum likelihood fit of all parameters {lb, dE, a, b, c}
+    to all energies simultaneously.
 
-    This fits the full model:
-    - μ_E = λ * E0 + Δ
-    - σ_E = E0 * sqrt((a/sqrt(E0))^2 + (b/E0)^2 + c^2)
-
-    Parameters
-    ----------
-    data_dict : dict
-        Dictionary mapping E0 -> array of E measurements
-    initial_params : dict, optional
-        Initial guesses for parameters {'lam', 'delta', 'a', 'b', 'c'}
-
-    Returns
-    -------
-    params : dict
-        Fitted parameter values {'lam', 'delta', 'a', 'b', 'c'}
-        (Note: 'lam' is lambda, 'delta' is Delta)
-    errors : dict
-        Errors on fitted parameters
-    minuit_obj : Minuit
-        The Minuit object (for advanced usage)
-
-    Examples
-    --------
-    >>> params, errors, m = fit_simultaneous_all_energies(data_dict)
-    >>> print(f"λ = {params['lam']:.4f} ± {errors['lam']:.4f}")
-    >>> print(f"Δ = {params['delta']:.4f} ± {errors['delta']:.4f}")
-
-    Notes
-    -----
-    The likelihood is the product of normal distributions at each E0:
-    L = ∏_{i,j} Normal(E_ij | μ(E0_i), σ(E0_i))
-
-    where i runs over energy points and j runs over measurements at each energy.
+    Model:
+        μ(E0) = lb * E0 + dE
+        σ(E0) = E0 * sqrt( (a/sqrt(E0))^2 + (b/E0)^2 + c^2 )
     """
-    # Set default initial parameters if not provided
+
+    # ------------------------------------------------------------
+    # Default starting values
+    # ------------------------------------------------------------
     if initial_params is None:
-        initial_params = {
-            'lam': 1.0,      # Expect lambda near 1
-            'delta': 0.0,    # Expect small offset
-            'a': 1.0,
-            'b': 1.0,
-            'c': 0.1
-        }
+        initial_params = dict(
+            lb=1.0,
+            dE=0.0,
+            a=0.5,
+            b=1.0,
+            c=0.05,
+        )
 
-    # Define the simultaneous negative log-likelihood
-    def nll(lam, delta, a, b, c):
-        # Check for invalid parameter values
+    # ------------------------------------------------------------
+    # Negative log-likelihood
+    # ------------------------------------------------------------
+    def nll(lb, dE, a, b, c):
+
         if a <= 0 or b <= 0 or c <= 0:
-            return 1e10
+            return np.inf
 
-        total_nll = 0.0
+        total = 0.0
 
-        for e0, e_measurements in data_dict.items():
-            # Compute expected mean and width at this E0
-            mu_E = lam * e0 + delta
-            sigma_over_E0_sq = (a / np.sqrt(e0))**2 + (b / e0)**2 + c**2
-            sigma_E = e0 * np.sqrt(sigma_over_E0_sq)
+        for e0, measurements in data_dict.items():
 
-            if sigma_E <= 0:
-                return 1e10
+            mu = lb * e0 + dE
+            sigma_sq = (a/np.sqrt(e0))**2 + (b/e0)**2 + c**2
+            sigma = e0 * np.sqrt(sigma_sq)
 
-            # Add log-likelihood for this energy point
-            total_nll += -np.sum(norm.logpdf(e_measurements, mu_E, sigma_E))
+            if sigma <= 0:
+                return np.inf
 
-        return total_nll
+            total -= np.sum(norm.logpdf(measurements, mu, sigma))
 
-    # Create Minuit object
+        return total
+
+    # ------------------------------------------------------------
+    # Minuit object
+    # ------------------------------------------------------------
     m = Minuit(nll, **initial_params)
-
-    # Set parameter limits (all parameters should be positive except lambda and delta)
-    m.limits['a'] = (0, None)
-    m.limits['b'] = (0, None)
-    m.limits['c'] = (0, None)
-    m.limits['lam'] = (0.5, 1.5)  # Lambda should be close to 1
-    # delta can be positive or negative (no limits)
-
     m.errordef = Minuit.LIKELIHOOD
 
-    # Run minimization
+    m.limits["a"] = (0, None)
+    m.limits["b"] = (0, None)
+    m.limits["c"] = (0, None)
+
+    # ------------------------------------------------------------
+    # Minimise
+    # ------------------------------------------------------------
     m.migrad()
+    m.hesse()
 
-    # Check if fit was successful
-    if not m.valid:
-        print("Warning: Simultaneous fit may not have converged properly")
-        print(f"Valid: {m.valid}, Accurate: {m.accurate}")
+    # ------------------------------------------------------------
+    # Collect results
+    # ------------------------------------------------------------
+    params = dict(
+        lb=m.values["lb"],
+        dE=m.values["dE"],
+        a=m.values["a"],
+        b=m.values["b"],
+        c=m.values["c"],
+    )
 
-    # Extract results
-    params = {
-        'lam': m.values['lam'],
-        'delta': m.values['delta'],
-        'a': m.values['a'],
-        'b': m.values['b'],
-        'c': m.values['c']
-    }
-
-    errors = {
-        'lam': m.errors['lam'],
-        'delta': m.errors['delta'],
-        'a': m.errors['a'],
-        'b': m.errors['b'],
-        'c': m.errors['c']
-    }
+    errors = dict(
+        lb=m.errors["lb"],
+        dE=m.errors["dE"],
+        a=m.errors["a"],
+        b=m.errors["b"],
+        c=m.errors["c"],
+    )
 
     return params, errors, m
