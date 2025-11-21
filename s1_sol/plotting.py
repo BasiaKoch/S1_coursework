@@ -111,7 +111,8 @@ def plot_sample_statistics(stats_df, savepath="figs/Figure1.3.pdf"):
 # ----------------------------------------------------------
 def bootstrap_fit_results(e0_values, means, mean_errs, stds, std_errs,
                           fit_mean_fn, fit_width_fn, n_boot=500):
-
+    
+    #empty lists to store the bootstrap results
     lam_samples = []
     delta_samples = []
     a_samples = []
@@ -121,7 +122,7 @@ def bootstrap_fit_results(e0_values, means, mean_errs, stds, std_errs,
     rng = np.random.default_rng(123)
 
     for _ in range(n_boot):
-
+        #create a new bootstrap dataset 
         # resample means + widths using Gaussian errors
         means_bs = rng.normal(means, mean_errs)
         stds_bs  = rng.normal(stds, std_errs)
@@ -131,12 +132,13 @@ def bootstrap_fit_results(e0_values, means, mean_errs, stds, std_errs,
         lam_samples.append(lam)
         delta_samples.append(delta)
 
-        # fit width model
+        # fit width model on the bootstap dataset 
         a, b, c, _, _, _ = fit_width_fn(e0_values, stds_bs, std_errs)
+        #save the parameters 
         a_samples.append(a)
         b_samples.append(b)
         c_samples.append(c)
-
+    #return all bootstrap distributions  -> 500loops
     return (
         np.array(lam_samples), np.array(delta_samples),
         np.array(a_samples), np.array(b_samples), np.array(c_samples)
@@ -209,7 +211,7 @@ def plot_rescaled_with_fits_and_bands(stats_df,
     )
 
     ax[0].set_xlabel("$E_0$ [GeV]")
-    ax[0].set_ylabel("$\hat{\\mu}_{\\rm samp} - E_0$ [GeV]")
+    ax[0].set_ylabel("$\\hat{\\mu} - E_0$ [GeV]")
     ax[0].set_title("Mean Bias vs $E_0$")
     ax[0].grid(True, alpha=0.3)
     ax[0].legend()
@@ -224,13 +226,15 @@ def plot_rescaled_with_fits_and_bands(stats_df,
     )
 
     ax[1].set_xlabel("$E_0$ [GeV]")
-    ax[1].set_ylabel("$\hat{\\sigma}_{\\rm samp}/E_0$")
+    ax[1].set_ylabel("$\\hat{\\sigma}/E_0$")
     ax[1].set_title("Relative Width vs $E_0$")
     ax[1].grid(True, alpha=0.3)
     ax[1].legend()
 
     fig.tight_layout()
-    os.makedirs("figs", exist_ok=True)
+    save_dir = os.path.dirname(savepath)
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
     fig.savefig(savepath)
 
     return fig, ax
